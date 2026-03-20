@@ -1,8 +1,9 @@
 """按微信用户隔离的 PaperQA（[Future-House/paper-qa](https://github.com/Future-House/paper-qa)）封装。
 
-扩展了 PaperQA 原生 tool-calling 架构：在标准工具集（paper_search /
-gather_evidence / gen_answer / reset / complete）之外注入了 direct_answer
-工具，让 agent 在论文库为空或问题不需要文献时也能直接作答。
+问答路由策略：
+- 文献库为空时直接调 LLM，跳过 agent
+- 文献库有内容时走 PaperQA agent（注入了 direct_answer 工具）
+- agent 返回 CANNOT_ANSWER_PHRASE（无相关证据）时也改用直接 LLM 回答
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from aviary.core import Tool
 from paperqa.agents.env import PaperQAEnvironment
 from paperqa.agents.main import agent_query
 from paperqa.agents.tools import EnvironmentState, NamedTool
-from paperqa.prompts import env_reset_prompt
+from paperqa.prompts import CANNOT_ANSWER_PHRASE, env_reset_prompt
 from paperqa.settings import AgentSettings, IndexSettings, Settings
 
 from app.config import AppConfig
@@ -256,20 +257,72 @@ async def ingest_url(cfg: AppConfig, openid: str, url: str) -> str:
     return f"已保存到文献库: {name}（正在建立索引，可直接提问）"
 
 
+async def _direct_llm_answer(cfg: AppConfig, question: str) -> str:
+    """跳过 PaperQA agent，直接调 LLM 回答。用于文献库为空或无相关证据的场景。"""
+    raw_model = cfg.llm_model or cfg.paperqa_llm
+    litellm_model = f"openai/{raw_model}" if cfg.llm_base_url else raw_model
+    kwargs: dict = {
+        "model": litellm_model,
+        "messages": [
+            {"role": "system", "content": _DIRECT_ANSWER_SYSTEM_PROMPT},
+            {"role": "user", "content": question},
+        ],
+    }
+    if cfg.llm_base_url and cfg.llm_api_key:
+        kwargs["api_base"] = cfg.llm_base_url
+        kwargs["api_key"] = cfg.llm_api_key
+
+    logger.info("直接 LLM 回答: model=%s q=%s...", litellm_model, question[:60])
+    response = await litellm.acompletion(**kwargs)
+    answer: str = response.choices[0].message.content or ""
+    if not answer:
+        raise RuntimeError("_direct_llm_answer: LLM 返回空答案")
+    return answer.strip()
+
+
 async def ask_paperqa(cfg: AppConfig, openid: str, question: str) -> str:
-    """对用户文献库执行 PaperQA agent 问答（含 direct_answer 工具，无论文时自动降级）。"""
+    """对用户文献库执行问答。
+
+    路由策略：
+    - 文献库为空 → 直接调 LLM，跳过 agent（省时省 token）
+    - 文献库有内容 → 走 PaperQA agent（含 direct_answer 工具）
+    - agent 返回"无法回答"哨兵短语 → 改用直接 LLM 回答
+    """
+    papers, _ = user_paths(cfg, openid)
+    paper_count = (
+        sum(1 for f in papers.iterdir() if f.is_file() and not f.name.startswith("."))
+        if papers.exists()
+        else 0
+    )
+    logger.info(
+        "PaperQA 提问: openid_hash=%s paper_count=%d q=%s...",
+        user_dir_hash(openid),
+        paper_count,
+        question[:80],
+    )
+
+    if paper_count == 0:
+        logger.info("文献库为空，跳过 agent 直接调 LLM")
+        return await _direct_llm_answer(cfg, question)
+
     settings = build_settings_for_user(cfg, openid)
     env_class = _make_extended_env_class(cfg)
-    logger.info("PaperQA 提问: openid_hash=%s q=%s...", user_dir_hash(openid), question[:80])
     try:
         response = await agent_query(question, settings, env_class=env_class)
     except Exception:
         logger.exception("PaperQA 执行失败 openid_hash=%s", user_dir_hash(openid))
         raise
+
     ans = response.session.answer.strip()
     if not ans:
         logger.error("PaperQA 返回空答案 status=%s", response.status)
         raise RuntimeError("模型未返回有效答案")
+
+    # agent 找到论文但无相关证据时会返回 CANNOT_ANSWER_PHRASE，改走直接 LLM
+    if CANNOT_ANSWER_PHRASE in ans:
+        logger.info("agent 无相关证据，改用直接 LLM 回答 openid_hash=%s", user_dir_hash(openid))
+        return await _direct_llm_answer(cfg, question)
+
     return ans
 
 
