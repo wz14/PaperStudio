@@ -51,6 +51,20 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/")
+async def wechat_verify(request: Request) -> Response:
+    """处理微信服务器 URL 配置时的 GET 验证请求（后台填根路径时使用）。"""
+    cfg = get_config()
+    if not cfg.wechat_token:
+        logger.error("未配置 WECHAT_TOKEN")
+        return Response(content="config error", status_code=500)
+    if not _check_sig(cfg, request):
+        return Response(content="signature error", status_code=403)
+    echostr = request.query_params.get("echostr") or ""
+    logger.info("微信根路径 URL 验证通过 echostr=%s", echostr)
+    return Response(content=echostr, media_type="text/plain")
+
+
 def _check_sig(cfg: AppConfig, request: Request) -> bool:
     sig = request.query_params.get("signature") or ""
     ts = request.query_params.get("timestamp") or ""

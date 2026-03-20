@@ -36,14 +36,44 @@ def user_paths(cfg: AppConfig, openid: str) -> tuple[Path, Path]:
     return papers, indexes
 
 
+def _build_llm_config(cfg: AppConfig) -> dict | None:
+    """若配置了自定义 LLM 端点，构造 litellm model_list 格式的 llm_config。"""
+    if not (cfg.llm_base_url and cfg.llm_api_key and cfg.llm_model):
+        return None
+    return {
+        "model_list": [
+            {
+                "model_name": cfg.llm_model,
+                "litellm_params": {
+                    "model": cfg.llm_model,
+                    "api_base": cfg.llm_base_url,
+                    "api_key": cfg.llm_api_key,
+                },
+            }
+        ]
+    }
+
+
 def build_settings_for_user(cfg: AppConfig, openid: str) -> Settings:
     papers, indexes = user_paths(cfg, openid)
     papers.mkdir(parents=True, exist_ok=True)
     indexes.mkdir(parents=True, exist_ok=True)
 
-    return Settings(
-        llm=cfg.paperqa_llm,
-        summary_llm=cfg.paperqa_summary_llm,
+    # 使用自定义模型名或 PAPERQA_LLM 环境变量
+    llm_name = cfg.llm_model or cfg.paperqa_llm
+    summary_llm_name = cfg.llm_model or cfg.paperqa_summary_llm
+    llm_config = _build_llm_config(cfg)
+
+    logger.info(
+        "构建 PaperQA Settings: llm=%s summary_llm=%s custom_endpoint=%s",
+        llm_name,
+        summary_llm_name,
+        bool(llm_config),
+    )
+
+    kwargs: dict = dict(
+        llm=llm_name,
+        summary_llm=summary_llm_name,
         embedding=cfg.paperqa_embedding,
         verbosity=0,
         agent=AgentSettings(
@@ -58,6 +88,11 @@ def build_settings_for_user(cfg: AppConfig, openid: str) -> Settings:
             rebuild_index=True,
         ),
     )
+    if llm_config is not None:
+        kwargs["llm_config"] = llm_config
+        kwargs["summary_llm_config"] = llm_config
+
+    return Settings(**kwargs)
 
 
 async def list_papers(cfg: AppConfig, openid: str) -> list[str]:

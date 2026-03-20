@@ -24,7 +24,14 @@ class AppConfig(BaseSettings):
     )
     data_dir: Path = Field(default=Path("./data"), validation_alias="DATA_DIR")
 
+    # LLM 自定义端点（兼容 OpenAI 协议的第三方或本地服务）
+    # 三项均设置后，rag_service 会通过 llm_config 传入 PaperQA。
+    llm_base_url: str = Field(default="", validation_alias="LLM_BASE_URL")
+    llm_api_key: str = Field(default="", validation_alias="LLM_API_KEY")
+    llm_model: str = Field(default="", validation_alias="LLM_MODEL")
+
     # PaperQA / LiteLLM（OPENAI_API_KEY 等由 litellm 读取）
+    # llm_model 未设置时，以下三项作为默认模型名称。
     paperqa_llm: str = Field(default="gpt-4o-mini", validation_alias="PAPERQA_LLM")
     paperqa_summary_llm: str = Field(
         default="gpt-4o-mini", validation_alias="PAPERQA_SUMMARY_LLM"
