@@ -97,8 +97,11 @@ class DirectAnswer(NamedTool):
 
 def _make_extended_env_class(cfg: AppConfig) -> type[PaperQAEnvironment]:
     """返回一个注入了 DirectAnswer 工具的 PaperQAEnvironment 子类。"""
+    raw_model = cfg.llm_model or cfg.paperqa_llm
+    # 自定义端点时加 openai/ 前缀；使用内置模型名（如 gpt-4o-mini）时不需要
+    litellm_model = f"openai/{raw_model}" if cfg.llm_base_url else raw_model
     direct_tool_instance = DirectAnswer(
-        llm_model_name=cfg.llm_model or cfg.paperqa_llm,
+        llm_model_name=litellm_model,
         api_base=cfg.llm_base_url,
         api_key=cfg.llm_api_key,
     )
@@ -128,15 +131,21 @@ def user_paths(cfg: AppConfig, openid: str) -> tuple[Path, Path]:
 
 
 def _build_llm_config(cfg: AppConfig) -> dict | None:
-    """若配置了自定义 LLM 端点，构造 litellm model_list 格式的 llm_config。"""
+    """若配置了自定义 LLM 端点，构造 litellm model_list 格式的 llm_config。
+
+    litellm 要求 litellm_params.model 带 provider 前缀（如 openai/xxx）才能
+    识别协议类型；model_name 保持原始名用于内部路由引用。
+    """
     if not (cfg.llm_base_url and cfg.llm_api_key and cfg.llm_model):
         return None
+    # 自定义端点均走 OpenAI 兼容协议，加 openai/ 前缀告知 litellm
+    litellm_model = f"openai/{cfg.llm_model}"
     return {
         "model_list": [
             {
                 "model_name": cfg.llm_model,
                 "litellm_params": {
-                    "model": cfg.llm_model,
+                    "model": litellm_model,
                     "api_base": cfg.llm_base_url,
                     "api_key": cfg.llm_api_key,
                 },
