@@ -1,0 +1,16 @@
+# PaperQA (Future-House/paper-qa) + PDF
+paper-qa[pypdf]>=2026.2.0
+
+# Web
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+httpx>=0.27.0
+python-multipart>=0.0.9
+pydantic-settings>=2.6.0
+
+# Storage
+sqlalchemy>=2.0.36
+aiosqlite>=0.20.0
+
+# Utils
+python-dotenv>=1.0.0
