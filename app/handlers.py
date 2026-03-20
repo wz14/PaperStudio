@@ -68,21 +68,11 @@ async def run_rag_background(
         await upsert_user(session, openid)
         await append_message(session, openid, "user", question)
 
-    papers = await rag_service.list_papers(cfg, openid)
-    if not papers:
-        warn = (
-            "你的文献库还是空的。请先发送「添加 https://arxiv.org/pdf/...」"
-            "或分享论文链接，再向我提问。"
-        )
-        async with factory() as session:
-            await append_message(session, openid, "assistant", warn)
-        await send_custom_text(app_id, app_secret, openid, warn)
-        return
-
+    # ask_paperqa 内含 DirectAnswer 工具，无文献时 agent 会自动直接回答
     try:
         answer = await rag_service.ask_paperqa(cfg, openid, question)
     except Exception as e:
-        logger.exception("PaperQA 失败 openid=%s", openid[:8])
+        logger.exception("ask_paperqa 失败 openid=%s", openid[:8])
         err = f"处理失败：{e!s}"
         async with factory() as session:
             await append_message(session, openid, "assistant", err)

@@ -207,7 +207,7 @@ async def wechat_callback(request: Request, background_tasks: BackgroundTasks) -
             )
             ack = (
                 sync
-                or "已收到你的问题，正在基于 PaperQA 检索文献并生成回答，请稍候查看下一条消息…"
+                or "已收到你的问题，正在思考中，请稍候查看下一条消息…"
             )
             xml = build_text_reply(
                 to_user=from_user, from_user=to_user, content=ack
