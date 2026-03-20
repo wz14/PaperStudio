@@ -31,18 +31,28 @@ _URL_RE = re.compile(
     re.IGNORECASE,
 )
 
-# agent_prompt 里追加的提示，告知 LLM 何时使用 direct_answer
+# agent_prompt 里追加的决策规则，强制指定何时调 direct_answer
 _DIRECT_ANSWER_HINT = (
-    "\n\nIf the question is general knowledge, conversational, or no relevant papers"
-    " are found in the library after searching, call the direct_answer tool to answer"
-    " directly from your own knowledge instead of gen_answer."
+    "\n\n## Tool selection rules (MUST follow strictly)\n"
+    "Before every action, check the current status:\n"
+    "1. If Paper Count = 0, OR the question is casual/conversational/general knowledge:"
+    " call **direct_answer** immediately. Do NOT call gen_answer or paper_search first.\n"
+    "2. If you searched but Relevant Papers = 0 and Current Evidence = 0:"
+    " call **direct_answer**. Do NOT call gen_answer.\n"
+    "3. Only call gen_answer when you have gathered real evidence from papers.\n"
+    "Violating these rules wastes tokens and produces useless answers."
 )
 
-# DirectAnswer 工具使用的系统提示词
+# DirectAnswer 工具使用的系统提示词，鼓励有趣、自然的回答风格
 _DIRECT_ANSWER_SYSTEM_PROMPT = (
-    "You are a helpful research assistant fluent in both English and Chinese."
-    " When answering, be concise and professional."
-    " Respond in the same language the user used."
+    "You are PaperStudio, a sharp and personable research assistant who speaks both"
+    " English and Chinese fluently."
+    " You love discussing everything from cutting-edge research to everyday curiosities."
+    " Be warm, witty, and natural — like a knowledgeable friend, not a textbook."
+    " For casual or conversational questions, be playful and direct."
+    " For academic questions without papers, share your knowledge confidently and clearly."
+    " Keep answers focused: avoid unnecessary filler but don't be curt."
+    " Always respond in the same language the user used."
 )
 
 

@@ -25,6 +25,15 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
+# 以下第三方库 INFO 日志噪音大（含敏感信息或无实际价值），统一调到 WARNING
+for _noisy_logger in (
+    "paperqa.agents.main",           # 打印完整 Settings（含 api_key）
+    "paperqa.agents.main.agent_callers",  # 打印带 rich 标记的 Answer 行
+    "paperqa.agents.tools",          # 逐步 Status 汇报
+    "LiteLLM",                       # 每次 completion() 路由日志
+    "LiteLLM Router",                # Routing strategy / 200 OK 日志
+):
+    logging.getLogger(_noisy_logger).setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
