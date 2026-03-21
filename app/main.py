@@ -20,6 +20,7 @@ from app.handlers import (
     run_rag_background,
 )
 from app.wechat import build_text_reply, parse_wechat_xml, verify_signature
+from app.web_router import indexing_worker, router as web_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -49,10 +50,24 @@ async def lifespan(app: FastAPI):
     init_db(cfg.database_url)
     await create_tables()
     logger.info("PaperStudio 启动 data_dir=%s", cfg.data_dir.resolve())
+
+    # 启动 Web UI 后台索引 worker（串行处理队列，防止 LLM 并发过载）
+    worker_task = asyncio.create_task(indexing_worker(cfg))
+    logger.info("Web UI 索引 worker 已创建")
+
     yield
+
+    worker_task.cancel()
+    try:
+        await worker_task
+    except asyncio.CancelledError:
+        pass
 
 
 app = FastAPI(title="PaperStudio", lifespan=lifespan)
+
+# 挂载 Web UI 路由（/ui/*）
+app.include_router(web_router)
 
 
 @app.get("/health")

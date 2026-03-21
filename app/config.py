@@ -47,3 +47,11 @@ class AppConfig(BaseSettings):
     wechat_token: str = Field(default="", validation_alias="WECHAT_TOKEN")
     wechat_app_id: str = Field(default="", validation_alias="WECHAT_APP_ID")
     wechat_app_secret: str = Field(default="", validation_alias="WECHAT_APP_SECRET")
+
+    # Web UI 认证（格式："user1:pass1,user2:pass2"）
+    web_users: str = Field(default="admin:paperstudio", validation_alias="WEB_USERS")
+    # JWT 签名密钥，生产环境请务必替换为随机长字符串
+    web_secret_key: str = Field(
+        default="paperstudio-dev-key-change-in-production",
+        validation_alias="WEB_SECRET_KEY",
+    )

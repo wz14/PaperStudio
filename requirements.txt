@@ -1,5 +1,5 @@
 # PaperQA (Future-House/paper-qa) + PDF
-paper-qa[pypdf]>=2026.2.0
+paper-qa[pypdf]>=5.0.0a
 
 # Web
 fastapi>=0.115.0
@@ -14,3 +14,8 @@ aiosqlite>=0.20.0
 
 # Utils
 python-dotenv>=1.0.0
+
+# Web UI auth
+PyJWT>=2.8.0
+
+litellm>=1.81.14
